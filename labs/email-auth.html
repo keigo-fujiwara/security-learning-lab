@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>メール認証演習</title>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/common.js" data-root=".."></script>
+</head>
+<body>
+<main>
+  <span class="pill">LAB 06</span>
+  <h1>メール認証演習（SPF / DKIM / DMARC）</h1>
+  <p class="lead">メールの差出人（From）は、仕組み上いくらでも偽装できます。Emotet や取引先を装うビジネスメール詐欺（BEC）も、この性質を悪用します。受信側はメールヘッダーの認証結果を確認し、送信側はDNSに正しい設定を行うことで、なりすましを防ぎます。</p>
+  <div class="progress-bar" id="lab-progress"></div>
+
+  <h2>1. 3つの仕組み</h2>
+  <div class="grid">
+    <div class="card"><span class="tag">SPF</span><h3>送信サーバーの確認</h3><p>「このドメインのメールは、このIPアドレスのサーバーから送る」とDNSに登録し、受信側が照合します。</p></div>
+    <div class="card"><span class="tag">DKIM</span><h3>電子署名の確認</h3><p>送信サーバーがメールに署名し、受信側がDNSの公開鍵で検証。途中で改ざんされていないことも分かります。</p></div>
+    <div class="card"><span class="tag">DMARC</span><h3>認証失敗時の方針</h3><p>SPF/DKIMの結果と From のドメインが一致するかを確認し、失敗時に「拒否・隔離・何もしない」を指定します。</p></div>
+  </div>
+
+  <h2>2. 実践A：ヘッダーを読んでなりすましを判定</h2>
+  <p>受信したメールのヘッダー（抜粋）です。<code>Authentication-Results</code> を読み、正規のメールか判定してください。</p>
+  <div id="quiz"></div>
+  <div id="quiz-score" class="result info" hidden></div>
+
+  <h2>3. 実践B：DNSを調べて自社ドメインを守る</h2>
+  <p>あなたは架空の会社「みらい商事（<code>mirai-shoji.co.jp</code>）」の情報システム担当です。ターミナルで現在の設定を調べ、問題点を見つけて修正しましょう。</p>
+  <div class="panel">
+    <pre class="code">dig TXT mirai-shoji.co.jp          # SPFレコードを確認
+dig TXT _dmarc.mirai-shoji.co.jp   # DMARCレコードを確認
+spfcheck 198.51.100.200 mirai-shoji.co.jp   # そのIPが送信を許可されているか</pre>
+  </div>
+  <div id="term"></div>
+  <div class="panel">
+    <h3>課題：DMARCレコードを強化しよう</h3>
+    <p>現在の DMARC は <code>p=none</code>（認証に失敗しても何もしない）になっています。なりすましメールを<strong>受信拒否</strong>させ、集計レポートを <code>dmarc-report@mirai-shoji.co.jp</code> に送るレコードを書いてください。</p>
+    <label for="dmarc">_dmarc.mirai-shoji.co.jp の TXT レコード</label>
+    <input type="text" id="dmarc" value="v=DMARC1; p=none" spellcheck="false">
+    <div class="btn-row"><button id="dmarc-go">DNSに登録（検証）</button></div>
+    <div id="dmarc-out"></div>
+    <div class="note warn">実際の運用では、いきなり <code>p=reject</code> にすると正規のメール（外部の配信サービスなど）まで届かなくなる場合があります。<code>p=none</code> でレポートを確認 → <code>p=quarantine</code> → <code>p=reject</code> と段階的に進めましょう。</div>
+  </div>
+
+  <h2>4. 今日からできる対策</h2>
+  <div class="panel">
+    <ul>
+      <li>受信者：差出人名が知人・取引先でも、<strong>添付ファイル（特にマクロ付きOffice文書、パスワード付きZIP）</strong>や支払先変更の依頼は、電話など別の手段で確認する。</li>
+      <li>受信者：Officeのマクロは無効のままにし、「コンテンツの有効化」を安易に押さない。</li>
+      <li>管理者：自社ドメインに SPF・DKIM・DMARC を設定する。メールを送らないドメインも <code>v=spf1 -all</code> と DMARC <code>p=reject</code> で悪用を防げる。</li>
+    </ul>
+  </div>
+</main>
+
+<script>
+const LAB = 'email-auth', TOTAL = 2;
+SLL.renderTaskStatus(LAB, TOTAL);
+
+const QUIZ = [
+  { fake: false, h:
+`From: "さくら銀行" <info@sakura-bank.co.jp>
+Return-Path: <bounce@sakura-bank.co.jp>
+Authentication-Results: mx.example.jp;
+  spf=pass smtp.mailfrom=sakura-bank.co.jp;
+  dkim=pass header.d=sakura-bank.co.jp;
+  dmarc=pass header.from=sakura-bank.co.jp`,
+    why: 'SPF・DKIM・DMARC がすべて pass で、ドメインも From と一致しています。' },
+  { fake: true, h:
+`From: "さくら銀行" <info@sakura-bank.co.jp>
+Return-Path: <a8x2@mailer-bulk.example>
+Authentication-Results: mx.example.jp;
+  spf=pass smtp.mailfrom=mailer-bulk.example;
+  dkim=none;
+  dmarc=fail header.from=sakura-bank.co.jp`,
+    why: 'SPFは pass ですが、それは「mailer-bulk.example」というまったく別のドメインとしての結果です。From のドメインと一致しないため DMARC が fail。From を偽装した典型的ななりすましです。' },
+  { fake: true, h:
+`From: "経理部 田中" <tanaka@mirai-shoji.co.jp>
+Reply-To: <tanaka.mirai@freemail.example>
+Authentication-Results: mx.example.jp;
+  spf=softfail smtp.mailfrom=mirai-shoji.co.jp;
+  dkim=none;
+  dmarc=fail header.from=mirai-shoji.co.jp
+Subject: 【至急】振込先口座変更のお願い`,
+    why: 'SPFが softfail、DMARCが fail。さらに Reply-To が別のフリーメールになっており、返信すると攻撃者に届きます。支払先変更の依頼はビジネスメール詐欺の代表的な手口です。' },
+  { fake: false, h:
+`From: "やまびこ急便" <no-reply@yamabiko-express.co.jp>
+Return-Path: <bounce@mail.yamabiko-express.co.jp>
+Authentication-Results: mx.example.jp;
+  spf=pass smtp.mailfrom=mail.yamabiko-express.co.jp;
+  dkim=pass header.d=yamabiko-express.co.jp;
+  dmarc=pass header.from=yamabiko-express.co.jp`,
+    why: 'サブドメイン mail.yamabiko-express.co.jp から送信されていますが、同じ組織のドメインなので DMARC は pass します。' },
+  { fake: true, h:
+`From: "みどりカード" <support@midori-card.co.jp.notice-center.example>
+Authentication-Results: mx.example.jp;
+  spf=pass smtp.mailfrom=notice-center.example;
+  dkim=pass header.d=notice-center.example;
+  dmarc=pass header.from=notice-center.example`,
+    why: '認証はすべて pass ですが、それは攻撃者自身のドメイン notice-center.example として正しく送られているだけです。From のアドレスをよく見ると正規の midori-card.co.jp ではありません。「認証 pass ＝ 安全」ではない点に注意。' },
+];
+const quizEl = document.getElementById('quiz');
+const answered = {};
+quizEl.innerHTML = QUIZ.map((q, i) => `<div class="panel"><pre class="code" style="white-space:pre-wrap">${SLL.escapeHtml(q.h)}</pre>
+  <div class="btn-row"><button class="ok" data-q="${i}" data-a="0">正規のメール</button><button class="ng" data-q="${i}" data-a="1">なりすまし</button></div><div id="q-r-${i}"></div></div>`).join('');
+quizEl.addEventListener('click', e => {
+  const i = e.target.dataset.q; if (i === undefined) return;
+  const ok = (e.target.dataset.a === '1') === QUIZ[i].fake;
+  answered[i] = ok;
+  document.getElementById('q-r-' + i).innerHTML = `<div class="result ${ok ? 'ok' : 'ng'}"><strong>${ok ? '正解' : '不正解'}（${QUIZ[i].fake ? 'なりすまし' : '正規'}）</strong><br>${SLL.escapeHtml(QUIZ[i].why)}</div>`;
+  const n = Object.keys(answered).length, c = Object.values(answered).filter(Boolean).length;
+  const s = document.getElementById('quiz-score'); s.hidden = false;
+  s.textContent = `回答 ${n} / ${QUIZ.length}　正解 ${c}` + (n === QUIZ.length ? (c >= 4 ? '　→ 合格です！' : '　→ 4問以上の正解で合格です。') : '');
+  if (n === QUIZ.length && c >= 4) SLL.markTask(LAB, 'quiz', TOTAL);
+});
+
+// 模擬DNS
+const DNS = {
+  'mirai-shoji.co.jp': ['"v=spf1 ip4:192.0.2.0/28 include:_spf.mailsvc.example ~all"', '"google-site-verification=xxxx"'],
+  '_spf.mailsvc.example': ['"v=spf1 ip4:198.51.100.0/24 -all"'],
+  '_dmarc.mirai-shoji.co.jp': ['"v=DMARC1; p=none"'],
+  'sakura-bank.co.jp': ['"v=spf1 include:_spf.mailsvc.example -all"'],
+  '_dmarc.sakura-bank.co.jp': ['"v=DMARC1; p=reject; rua=mailto:dmarc@sakura-bank.co.jp"'],
+};
+const ip2n = ip => ip.split('.').reduce((a, b) => a * 256 + +b, 0);
+function inCidr(ip, cidr) { const [net, bits = '32'] = cidr.split('/'); const size = 2 ** (32 - +bits); const s = Math.floor(ip2n(net) / size) * size; const n = ip2n(ip); return n >= s && n < s + size; }
+function spfEval(ip, domain, depth = 0) {
+  const rec = (DNS[domain] || []).map(r => r.replace(/"/g, '')).find(r => r.startsWith('v=spf1'));
+  if (!rec || depth > 5) return { result: 'none', trace: [`${domain}: SPFレコードなし`] };
+  const trace = [`${'  '.repeat(depth)}${domain}: ${rec}`];
+  for (const term of rec.split(/\s+/).slice(1)) {
+    if (term.startsWith('ip4:') && inCidr(ip, term.slice(4))) { trace.push(`${'  '.repeat(depth)}  → ${term} に一致`); return { result: 'pass', trace }; }
+    if (term.startsWith('include:')) { const r = spfEval(ip, term.slice(8), depth + 1); trace.push(...r.trace); if (r.result === 'pass') return { result: 'pass', trace }; }
+    if (/^[-~?+]all$/.test(term)) { const q = { '-': 'fail', '~': 'softfail', '?': 'neutral', '+': 'pass' }[term[0]]; trace.push(`${'  '.repeat(depth)}  → どれにも一致せず ${term} = ${q}`); return { result: q, trace }; }
+  }
+  return { result: 'neutral', trace };
+}
+new SLL.Terminal(document.getElementById('term'), {
+  prompt: 'admin@mirai:~$ ',
+  banner: [{ text: '模擬DNSツール。コマンド: dig TXT <ドメイン> / spfcheck <IP> <ドメイン> / help', cls: 'hl' }, ''],
+  handler(line) {
+    const a = line.split(/\s+/);
+    if (a[0] === 'help') return ['dig TXT <ドメイン>        TXTレコードを表示', 'spfcheck <IP> <ドメイン>  SPF判定をシミュレーション', 'clear'];
+    if (a[0] === 'dig') {
+      const d = (a[1] && a[1].toUpperCase() === 'TXT' ? a[2] : a[1] || '').replace(/\.$/, '');
+      if (!d) return [{ text: '使い方: dig TXT <ドメイン>', cls: 'err' }];
+      const r = DNS[d];
+      return r ? [';; ANSWER SECTION:', ...r.map(x => `${d}.  3600  IN  TXT  ${x}`)] : [`;; ${d}: レコードが見つかりません (NXDOMAIN)`];
+    }
+    if (a[0] === 'spfcheck') {
+      if (!/^\d+\.\d+\.\d+\.\d+$/.test(a[1] || '') || !a[2]) return [{ text: '使い方: spfcheck <IP> <ドメイン>', cls: 'err' }];
+      const r = spfEval(a[1], a[2]);
+      return [...r.trace, { text: `結果: spf=${r.result}`, cls: 'hl' }];
+    }
+    return [{ text: `${a[0]}: コマンドが見つかりません`, cls: 'err' }];
+  },
+});
+
+document.getElementById('dmarc-go').addEventListener('click', () => {
+  const v = document.getElementById('dmarc').value.trim();
+  const tags = {};
+  v.split(';').map(s => s.trim()).filter(Boolean).forEach(t => { const [k, ...r] = t.split('='); tags[k.trim().toLowerCase()] = r.join('=').trim(); });
+  const errs = [];
+  if (tags.v !== 'DMARC1') errs.push('先頭は v=DMARC1 にします。');
+  if (!v.startsWith('v=DMARC1')) errs.push('v=DMARC1 はレコードの最初に書く必要があります。');
+  if (tags.p !== 'reject') errs.push(tags.p === 'quarantine' ? 'p=quarantine は「迷惑メールフォルダへ隔離」です。今回は受信拒否（reject）を指定しましょう。' : 'p= に受信拒否のポリシーを指定しましょう。');
+  if (!tags.rua || !/mailto:dmarc-report@mirai-shoji\.co\.jp/i.test(tags.rua)) errs.push('集計レポートの送信先は rua=mailto:アドレス の形式で指定します。');
+  document.getElementById('dmarc-out').innerHTML = errs.length
+    ? `<div class="result ng"><ul>${errs.map(e => `<li>${e}</li>`).join('')}</ul></div>`
+    : `<div class="result ok">登録しました！ <code>${SLL.escapeHtml(v)}</code><br>これで、mirai-shoji.co.jp を偽装したメールは、DMARCに対応した受信サーバーで拒否されるようになります。</div>`;
+  if (!errs.length) { DNS['_dmarc.mirai-shoji.co.jp'] = ['"' + v + '"']; SLL.markTask(LAB, 'dmarc', TOTAL); }
+});
+</script>
+</body>
+</html>

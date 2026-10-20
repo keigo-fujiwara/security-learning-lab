@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>セキュアコーディング演習</title>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/common.js" data-root=".."></script>
+</head>
+<body>
+<main>
+  <span class="pill">LAB 03</span>
+  <h1>セキュアコーディング演習</h1>
+  <p class="lead">Webサイトからの情報漏えいの多くは、「入力値を信用しすぎたコード」が原因です。問題のあるコードがなぜ危険なのかを確認し、<strong>自分でコードを書き直して自動テストを通す</strong>ことで、安全な書き方を身につけます。</p>
+  <div class="progress-bar" id="lab-progress"></div>
+  <div class="note">コードはこのページの中で実行されます。編集して「テスト実行」を押してください。分からないときは「ヒント」を開きましょう。</div>
+
+  <div id="exercises"></div>
+
+  <h2>まとめ：安全なコードの原則</h2>
+  <div class="panel">
+    <table class="t">
+      <tr><th>脆弱性</th><th>原因</th><th>対策</th></tr>
+      <tr><td>XSS（クロスサイトスクリプティング）</td><td>入力値をHTMLとしてそのまま出力</td><td>出力時にエスケープする / <code>textContent</code> を使う / CSPを設定する</td></tr>
+      <tr><td>SQLインジェクション</td><td>入力値をSQL文に文字列連結</td><td>プレースホルダ（プリペアドステートメント）を使う</td></tr>
+      <tr><td>アクセス制御の不備（IDOR）</td><td>IDさえ分かれば他人のデータを取得できる</td><td>サーバー側で「そのユーザーに権限があるか」を毎回確認する</td></tr>
+    </table>
+    <p style="margin-top:12px">さらに学ぶには、IPA「<a href="https://www.ipa.go.jp/security/vuln/websecurity/about.html" target="_blank" rel="noopener">安全なウェブサイトの作り方</a>」が参考になります。</p>
+  </div>
+</main>
+
+<script>
+const LAB = 'secure-coding';
+const EX = [
+  {
+    id: 'xss',
+    title: '演習1：XSS（クロスサイトスクリプティング）',
+    attack: '掲示板のコメント欄に、文字ではなく<strong>HTMLタグ</strong>を書き込まれるとどうなるでしょうか。下のコードは入力をそのままHTMLに埋め込んでいるため、<code>&lt;b&gt;</code> のようなタグが「文字」ではなく「命令」として解釈されます。攻撃者はこれを悪用して、閲覧者のブラウザで任意のスクリプトを動かし、ログイン情報を盗むなどします。',
+    code:
+`// コメントをHTML文字列にして返す関数
+function renderComment(name, text) {
+  return '<div class="comment"><b>' + name + '</b>: ' + text + '</div>';
+}`,
+    hint: '<code>&amp;</code> <code>&lt;</code> <code>&gt;</code> <code>&quot;</code> <code>&#39;</code> を、それぞれ <code>&amp;amp;</code> <code>&amp;lt;</code> <code>&amp;gt;</code> <code>&amp;quot;</code> <code>&amp;#39;</code> に置き換える <code>escapeHtml</code> 関数を作り、<code>name</code> と <code>text</code> に適用しましょう。<code>&amp;</code> を最初に置き換えるのがポイントです。',
+    answer:
+`function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function renderComment(name, text) {
+  return '<div class="comment"><b>' + escapeHtml(name) + '</b>: ' + escapeHtml(text) + '</div>';
+}`,
+    fn: 'renderComment',
+    run(f) {
+      const cases = [
+        { args: ['佐藤', 'こんにちは'], expect: '<div class="comment"><b>佐藤</b>: こんにちは</div>', label: '通常のコメントが正しく表示される' },
+        { args: ['田中', '<b>太字</b>にしてみた'], expect: '<div class="comment"><b>田中</b>: &lt;b&gt;太字&lt;/b&gt;にしてみた</div>', label: 'タグが文字として表示される' },
+        { args: ['<i>admin</i>', 'test'], expect: '<div class="comment"><b>&lt;i&gt;admin&lt;/i&gt;</b>: test</div>', label: '名前欄のタグも無害化される' },
+        { args: ['鈴木', 'A & B "quote" \'single\''], expect: '<div class="comment"><b>鈴木</b>: A &amp; B &quot;quote&quot; &#39;single&#39;</div>', label: '& や引用符もエスケープされる' },
+      ];
+      const results = cases.map(c => { const got = f(...c.args); return { ...c, got, pass: got === c.expect }; });
+      return { results, preview: results[1].got };
+    },
+  },
+  {
+    id: 'sqli',
+    title: '演習2：SQLインジェクション',
+    attack: 'ログイン画面や検索欄の入力値を、SQL文に<strong>文字列連結</strong>で埋め込むと、入力に含まれる <code>\'</code>（シングルクォート）によってSQL文の構造そのものが書き換えられてしまいます。その結果、本来見えないはずの他人のデータが取り出されることがあります。下のテストを一度実行して、連結されたSQL文がどう変化するか確認してから修正しましょう。',
+    code:
+`// ユーザー名でユーザーを検索する関数
+// db.query(sql, params) でSQLを実行できます
+function findUser(db, name) {
+  return db.query("SELECT * FROM users WHERE name = '" + name + "'");
+}`,
+    hint: 'SQL文の値の部分を <code>?</code>（プレースホルダ）にして、値は第2引数の配列で渡します。<br><code>db.query("SELECT * FROM users WHERE name = ?", [name])</code>',
+    answer:
+`function findUser(db, name) {
+  return db.query("SELECT * FROM users WHERE name = ?", [name]);
+}`,
+    fn: 'findUser',
+    run(f) {
+      const USERS = [{ id: 1, name: 'tanaka', email: 'tanaka@example.jp' }, { id: 2, name: 'suzuki', email: 'suzuki@example.jp' }, { id: 3, name: 'sato', email: 'sato@example.jp' }];
+      // 簡易DB: WHERE name = '...' / WHERE name = ? のみ解釈し、文字列連結で条件が壊れた場合は全件返す動作を模擬
+      const makeDb = log => ({
+        query(sql, params = []) {
+          log.push({ sql, params });
+          if (/name\s*=\s*\?/.test(sql) && params.length === 1) return USERS.filter(u => u.name === params[0]);
+          const m = sql.match(/name\s*=\s*'([^']*)'(.*)$/);
+          if (!m) return [];
+          if (m[2].trim()) return USERS.slice(); // クォートの後ろに条件が追加された＝構造が書き換えられた
+          return USERS.filter(u => u.name === m[1]);
+        },
+      });
+      const cases = [
+        { input: 'tanaka', label: '通常の検索で1件だけ返る', check: r => r.length === 1 && r[0].name === 'tanaka' },
+        { input: "x' OR '1'='1", label: '不正な入力で全件が漏れない', check: r => r.length === 0 },
+        { input: "o'brien", label: 'クォートを含む名前でも構造が壊れない', check: r => Array.isArray(r) && r.length === 0 },
+      ];
+      const results = cases.map(c => {
+        const log = [];
+        const r = f(makeDb(log), c.input);
+        const call = log[0] || { sql: '(呼び出しなし)', params: [] };
+        const usedPlaceholder = !call.sql.includes(c.input) && call.params.includes(c.input);
+        return { label: c.label, pass: c.check(r || []) && usedPlaceholder,
+          got: `SQL: ${call.sql}\nparams: ${JSON.stringify(call.params)}\n結果: ${JSON.stringify((r || []).map(u => u.name))}`,
+          expect: '入力値はSQL文に含めず、params で渡す' };
+      });
+      return { results };
+    },
+  },
+  {
+    id: 'idor',
+    title: '演習3：アクセス制御の不備（IDOR）',
+    attack: '通販サイトの注文詳細ページが <code>/orders/1002</code> のようなURLだった場合、数字を <code>1003</code> に変えるだけで<strong>他人の注文（住所・電話番号など）</strong>が見えてしまう不具合がよくあります。ログインしているかどうかだけでなく、「そのデータの持ち主か」を確認する必要があります。',
+    code:
+`// 注文情報を返す関数
+// currentUser: ログイン中のユーザー { id, role }
+// orders: 注文データ { [orderId]: { userId, item, address } }
+function getOrder(currentUser, orders, orderId) {
+  const order = orders[orderId];
+  if (!order) return null;
+  return order;
+}`,
+    hint: '<code>order.userId</code> と <code>currentUser.id</code> が一致しない場合は <code>null</code> を返します。ただし <code>currentUser.role === "admin"</code> の管理者はすべて閲覧できる仕様です。',
+    answer:
+`function getOrder(currentUser, orders, orderId) {
+  const order = orders[orderId];
+  if (!order) return null;
+  if (order.userId !== currentUser.id && currentUser.role !== 'admin') return null;
+  return order;
+}`,
+    fn: 'getOrder',
+    run(f) {
+      const orders = {
+        1002: { userId: 10, item: 'ノートPC', address: '東京都千代田区…' },
+        1003: { userId: 11, item: '加湿器', address: '大阪府大阪市…' },
+      };
+      const me = { id: 10, role: 'user' }, admin = { id: 1, role: 'admin' };
+      const cases = [
+        { label: '自分の注文は取得できる', got: f(me, orders, 1002), check: r => r && r.item === 'ノートPC' },
+        { label: '他人の注文は取得できない', got: f(me, orders, 1003), check: r => r === null || r === undefined },
+        { label: '管理者はすべての注文を取得できる', got: f(admin, orders, 1003), check: r => r && r.item === '加湿器' },
+        { label: '存在しない注文は null', got: f(me, orders, 9999), check: r => r === null || r === undefined },
+      ];
+      return { results: cases.map(c => ({ label: c.label, pass: !!c.check(c.got), got: JSON.stringify(c.got), expect: '' })) };
+    },
+  },
+];
+const TOTAL = EX.length;
+SLL.renderTaskStatus(LAB, TOTAL);
+
+const root = document.getElementById('exercises');
+const e = SLL.escapeHtml;
+EX.forEach(ex => {
+  const sec = document.createElement('section');
+  sec.innerHTML = `
+    <h2>${ex.title} ${SLL.isDone(LAB, ex.id) ? '<span class="pill green">クリア済み</span>' : ''}</h2>
+    <div class="note ng"><strong>攻撃者の視点</strong><br>${ex.attack}</div>
+    <div class="panel">
+      <label>コードを編集して安全にしてください</label>
+      <textarea class="code-editor" spellcheck="false" rows="10">${e(ex.code)}</textarea>
+      <div class="btn-row">
+        <button data-act="run">▶ テスト実行</button>
+        <button class="secondary" data-act="reset">元に戻す</button>
+      </div>
+      <details><summary>ヒント</summary><p>${ex.hint}</p></details>
+      <details><summary>解答例を見る</summary><pre class="code">${e(ex.answer)}</pre></details>
+      <div class="out"></div>
+    </div>`;
+  root.append(sec);
+  const ta = sec.querySelector('textarea'), out = sec.querySelector('.out');
+  ta.addEventListener('keydown', ev => {
+    if (ev.key === 'Tab') { ev.preventDefault(); const s = ta.selectionStart; ta.setRangeText('  ', s, ta.selectionEnd, 'end'); }
+  });
+  sec.addEventListener('click', ev => {
+    const act = ev.target.dataset.act;
+    if (act === 'reset') { ta.value = ex.code; out.innerHTML = ''; }
+    if (act !== 'run') return;
+    let f;
+    try { f = new Function(ta.value + `\nreturn ${ex.fn};`)(); }
+    catch (err) { out.innerHTML = `<div class="result ng">コードにエラーがあります: ${e(err.message)}</div>`; return; }
+    let res;
+    try { res = ex.run(f); }
+    catch (err) { out.innerHTML = `<div class="result ng">実行時エラー: ${e(err.message)}</div>`; return; }
+    const allPass = res.results.every(r => r.pass);
+    let html = `<div class="result ${allPass ? 'ok' : 'ng'}"><strong>${allPass ? '✓ すべてのテストに合格しました！' : '✖ 不合格のテストがあります'}</strong><ul>` +
+      res.results.map(r => `<li>${r.pass ? '✓' : '✖'} ${e(r.label)}${r.pass ? '' : `<pre class="code" style="white-space:pre-wrap">出力: ${e(r.got)}${r.expect ? '\n期待: ' + e(r.expect) : ''}</pre>`}</li>`).join('') + '</ul></div>';
+    if (res.preview !== undefined) {
+      html += `<label>ブラウザでの表示（スクリプトを実行しないサンドボックス内で描画）</label>
+        <iframe sandbox="" style="width:100%;height:60px;border:1px solid var(--border);border-radius:8px;background:#fff" srcdoc="${e(res.preview)}"></iframe>
+        <p style="font-size:13px;color:var(--muted)">「太字」が太字で表示されていたら、入力がHTMLとして解釈されています（＝XSSが可能な状態）。</p>`;
+    }
+    out.innerHTML = html;
+    if (allPass) SLL.markTask(LAB, ex.id, TOTAL);
+  });
+});
+</script>
+</body>
+</html>

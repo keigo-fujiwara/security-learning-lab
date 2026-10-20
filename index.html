@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>セキュリティ対策ラボ</title>
+<meta name="description" content="日本を狙うサイバー攻撃から身を守るための、手を動かして学ぶセキュリティ対策演習サイト">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/common.js" data-root="."></script>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <h1>セキュリティ対策ラボ</h1>
+    <p class="lead">フィッシング、ランサムウェア、不正ログイン、Webアプリの脆弱性など、日本の企業や個人を狙う攻撃が増えています。このラボでは、<strong>攻撃者の手口を理解し（攻撃側の視点）</strong>、<strong>それを見抜き・防ぐ（防御側の視点）</strong>ことを、コードやコマンドを実際に操作しながら学びます。</p>
+    <div class="progress-bar" id="overall"></div>
+  </section>
+
+  <h2>演習一覧</h2>
+  <div class="grid" id="lab-grid"></div>
+
+  <h2>このラボの進め方</h2>
+  <ol class="steps">
+    <li><strong>手口を知る</strong>: 各演習の冒頭で、攻撃者がどこを狙うのかを確認します。</li>
+    <li><strong>見抜く・調べる</strong>: 模擬メールの判定、ログの検索、ヘッダーの読解などを実際に行います。</li>
+    <li><strong>直す・守る</strong>: 問題のあるコードや設定を自分で修正し、自動テストや評価で効果を確かめます。</li>
+    <li><strong>日常の対策に落とし込む</strong>: 「日本を狙う脅威」のチェックリストで、職場や家庭の対策を見直します。</li>
+  </ol>
+
+  <div class="note warn">
+    <strong>注意</strong>: 演習はすべてこのページ内の模擬環境で完結します。ここで学んだ知識を、許可のないシステムに対して試すことは「不正アクセス禁止法」などの法律に違反する可能性があります。自分が管理する環境、または正式に許可を得た環境でのみ活用してください。
+  </div>
+
+  <div class="btn-row"><button class="secondary" id="reset">進捗をリセット</button></div>
+</main>
+
+<script>
+  const desc = {
+    'phishing': ['個人向け', '宅配業者や銀行を装ったSMS・メールを見分け、URLの本当の行き先を調べます。'],
+    'password': ['個人・組織', 'パスワードの強度を測り、ハッシュとソルトの効果をWeb Cryptoで実際に計算します。'],
+    'secure-coding': ['開発者向け', 'XSSやSQLインジェクションが起きるコードを、自分の手で安全なコードに書き直します。'],
+    'log-analysis': ['インシデント対応', '模擬ターミナルでgrepなどを使い、アクセスログから不正ログインの痕跡を探します。'],
+    'headers': ['Web管理者', 'CSPなどのセキュリティヘッダーを組み立て、どの攻撃を防げるかを評価します。'],
+    'email-auth': ['組織向け', 'SPF・DKIM・DMARCの結果をメールヘッダーから読み取り、なりすましを判定します。'],
+    'threats': ['全員', 'ランサムウェアやVPN機器の脆弱性など、日本で被害の多い脅威と対策チェックリスト。'],
+  };
+  const grid = document.getElementById('lab-grid');
+  let done = 0;
+  SLL.LABS.forEach((l, i) => {
+    const isDone = SLL.isDone(l.id);
+    if (isDone) done++;
+    const a = document.createElement('a');
+    a.className = 'card'; a.href = l.file;
+    a.innerHTML = `<span class="tag">LAB ${String(i + 1).padStart(2, '0')} ・ ${desc[l.id][0]}</span>
+      <h3>${l.title}</h3><p>${desc[l.id][1]}</p>
+      <span class="status ${isDone ? 'done' : ''}">${isDone ? '✓ 完了' : '未完了'}</span>`;
+    grid.append(a);
+  });
+  const pct = Math.round(done / SLL.LABS.length * 100);
+  document.getElementById('overall').innerHTML =
+    `<span>全体の進捗 ${done} / ${SLL.LABS.length}</span><div class="meter"><span style="width:${pct}%;background:var(--ok)"></span></div>`;
+  document.getElementById('reset').addEventListener('click', () => {
+    if (confirm('すべての進捗をリセットしますか？')) { SLL.reset(); location.reload(); }
+  });
+</script>
+</body>
+</html>

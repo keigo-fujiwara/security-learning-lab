@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>セキュリティヘッダー演習</title>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/common.js" data-root=".."></script>
+</head>
+<body>
+<main>
+  <span class="pill">LAB 05</span>
+  <h1>セキュリティヘッダー演習</h1>
+  <p class="lead">Webサーバーが返す「レスポンスヘッダー」を適切に設定すると、コードに脆弱性が残っていても被害を大きく減らせます。架空の通販サイト <code>https://shop.example.jp</code> の管理者になったつもりで、ヘッダーを設計しましょう。</p>
+  <div class="progress-bar" id="lab-progress"></div>
+
+  <h2>1. 攻撃者の視点：ヘッダーがないと何が起きる？</h2>
+  <div class="table-wrap panel">
+    <table class="t">
+      <tr><th>攻撃</th><th>内容</th><th>防ぐヘッダー</th></tr>
+      <tr><td>XSS</td><td>埋め込まれたスクリプトが実行される／外部の悪意あるスクリプトが読み込まれる</td><td><code>Content-Security-Policy</code></td></tr>
+      <tr><td>クリックジャッキング</td><td>透明にした自サイトを罠サイトに重ね、意図しないボタンを押させる</td><td><code>frame-ancestors</code> / <code>X-Frame-Options</code></td></tr>
+      <tr><td>通信の盗聴・改ざん</td><td>http で接続させ、通信を傍受する</td><td><code>Strict-Transport-Security</code></td></tr>
+      <tr><td>MIMEスニッフィング</td><td>画像として上げたファイルをスクリプトとして解釈させる</td><td><code>X-Content-Type-Options</code></td></tr>
+      <tr><td>Cookieの窃取・CSRF</td><td>JavaScriptからCookieを読む／他サイトからリクエストを送らせる</td><td><code>Set-Cookie</code> の <code>HttpOnly</code> / <code>Secure</code> / <code>SameSite</code></td></tr>
+    </table>
+  </div>
+
+  <h2>2. 実践A：CSP（Content-Security-Policy）を書く</h2>
+  <p>サイトが<strong>正常に動くために必要なもの</strong>は許可し、<strong>攻撃</strong>はすべてブロックするポリシーを書いてください。入力すると、各リソースが許可されるかを判定します。</p>
+  <div class="panel">
+    <label for="csp">Content-Security-Policy:</label>
+    <textarea id="csp" rows="4" spellcheck="false">default-src *; script-src * 'unsafe-inline'</textarea>
+    <details><summary>CSPの書き方ヒント</summary>
+      <ul>
+        <li>ディレクティブを <code>;</code> で区切って並べます。例: <code>default-src 'self'; img-src 'self' https://img.example</code></li>
+        <li><code>'self'</code> = 自分と同じオリジン、<code>'none'</code> = すべて禁止、<code>https://host</code> = 指定ホストのみ</li>
+        <li><code>default-src</code> は、個別の指定がないリソース種別の既定値です。</li>
+        <li><code>frame-ancestors</code>・<code>form-action</code>・<code>base-uri</code> は <code>default-src</code> の影響を受けないので、個別に指定が必要です。</li>
+        <li><code>'unsafe-inline'</code> を許可すると、埋め込まれたインラインスクリプトも実行されてしまいます。</li>
+      </ul>
+    </details>
+    <div id="csp-out"></div>
+  </div>
+
+  <h2>3. 実践B：その他のヘッダーとCookie</h2>
+  <div class="panel two-col">
+    <div class="checklist" id="hdr-opts">
+      <label><input type="checkbox" data-k="hsts"> Strict-Transport-Security: max-age=31536000; includeSubDomains</label>
+      <label><input type="checkbox" data-k="nosniff"> X-Content-Type-Options: nosniff</label>
+      <label><input type="checkbox" data-k="referrer"> Referrer-Policy: strict-origin-when-cross-origin</label>
+      <label><input type="checkbox" data-k="perm"> Permissions-Policy: camera=(), microphone=(), geolocation=()</label>
+      <hr style="border:none;border-top:1px solid var(--border);width:100%">
+      <strong style="font-size:14px">セッションCookieの属性</strong>
+      <label><input type="checkbox" data-k="httponly"> HttpOnly</label>
+      <label><input type="checkbox" data-k="secure"> Secure</label>
+      <label>SameSite: <select data-k="samesite" style="width:auto"><option value="">指定なし</option><option>None</option><option>Lax</option><option>Strict</option></select></label>
+    </div>
+    <div>
+      <label>生成されるレスポンスヘッダー</label>
+      <pre class="code" id="hdr-preview"></pre>
+      <div id="hdr-out"></div>
+    </div>
+  </div>
+
+  <h2>4. 自分のサイトを確認するには</h2>
+  <div class="panel">
+    <p style="margin-top:0">自分が管理するサイトのヘッダーは、次のコマンドやブラウザの開発者ツール（Network タブ）で確認できます。</p>
+    <pre class="code">curl -sI https://自分のサイト/ | grep -iE "content-security|strict-transport|x-frame|x-content-type|set-cookie"</pre>
+    <p>CSPは一度に厳しくすると表示が崩れることがあるので、まず <code>Content-Security-Policy-Report-Only</code> で違反を観察してから本番適用するのが安全です。</p>
+  </div>
+</main>
+
+<script>
+const LAB = 'headers', TOTAL = 2;
+SLL.renderTaskStatus(LAB, TOTAL);
+const ORIGIN = 'https://shop.example.jp';
+
+// 判定対象のリソース
+const RES = [
+  { legit: true, label: '自サイトのスクリプト /js/app.js', dir: 'script-src', url: ORIGIN + '/js/app.js' },
+  { legit: true, label: '自サイトのCSS /css/main.css', dir: 'style-src', url: ORIGIN + '/css/main.css' },
+  { legit: true, label: '画像配信サーバーの商品画像', dir: 'img-src', url: 'https://img.cdn-example.jp/items/12.jpg' },
+  { legit: true, label: '自サイトAPIへの通信 /api/cart', dir: 'connect-src', url: ORIGIN + '/api/cart' },
+  { legit: false, label: '口コミ欄に埋め込まれたインラインスクリプト', dir: 'script-src', inline: true },
+  { legit: false, label: '外部の不審なスクリプト https://evil.example/x.js', dir: 'script-src', url: 'https://evil.example/x.js' },
+  { legit: false, label: '罠サイト https://evil.example による iframe 埋め込み', dir: 'frame-ancestors', url: 'https://evil.example', noDefault: true },
+  { legit: false, label: 'フォームの送信先を https://evil.example に改ざん', dir: 'form-action', url: 'https://evil.example/steal', noDefault: true },
+  { legit: false, label: '<base> タグで相対URLの基準を書き換え', dir: 'base-uri', url: 'https://evil.example/', noDefault: true },
+];
+
+function parseCsp(text) {
+  const map = {};
+  text.split(';').map(s => s.trim()).filter(Boolean).forEach(d => {
+    const [name, ...vals] = d.split(/\s+/);
+    const k = name.toLowerCase();
+    if (!(k in map)) map[k] = vals;
+  });
+  return map;
+}
+function matchSource(src, url) {
+  const u = new URL(url);
+  const s = src.toLowerCase();
+  if (s === '*') return true;
+  if (s === "'self'") return u.origin === ORIGIN;
+  if (/^[a-z]+:$/.test(s)) return u.protocol === s;
+  let m = s.match(/^(?:(https?):\/\/)?(\*\.)?([^/:]+)(?::\d+)?(\/.*)?$/);
+  if (!m || s.startsWith("'")) return false;
+  if (m[1] && m[1] + ':' !== u.protocol) return false;
+  if (m[2]) return u.hostname.endsWith('.' + m[3]);
+  return u.hostname === m[3];
+}
+function allowed(map, r) {
+  let list = map[r.dir];
+  if (!list && !r.noDefault) list = map['default-src'];
+  if (!list) return true; // 指定なし＝制限なし
+  if (list.map(x => x.toLowerCase()).includes("'none'")) return false;
+  if (r.inline) return list.map(x => x.toLowerCase()).includes("'unsafe-inline'");
+  return list.some(s => matchSource(s, r.url));
+}
+const cspEl = document.getElementById('csp');
+function evalCsp() {
+  const map = parseCsp(cspEl.value);
+  let good = 0;
+  const rows = RES.map(r => {
+    const a = allowed(map, r), ok = a === r.legit;
+    if (ok) good++;
+    return `<tr><td>${r.legit ? '<span class="pill green">必要</span>' : '<span class="pill red">攻撃</span>'}</td><td>${SLL.escapeHtml(r.label)}</td>
+      <td>${a ? '許可' : 'ブロック'}</td><td>${ok ? '✓' : (r.legit ? '✖ サイトが壊れる' : '✖ 攻撃が成功')}</td></tr>`;
+  });
+  const all = good === RES.length;
+  document.getElementById('csp-out').innerHTML = `<div class="table-wrap"><table class="t"><tr><th></th><th>リソース</th><th>判定</th><th>評価</th></tr>${rows.join('')}</table></div>
+    <div class="result ${all ? 'ok' : 'info'}">${all ? '✓ 完璧です！必要なものだけを許可し、攻撃はすべてブロックできています。' : `正しく判定できているのは ${good} / ${RES.length} 件です。`}</div>`;
+  if (all) SLL.markTask(LAB, 'csp', TOTAL);
+}
+cspEl.addEventListener('input', evalCsp);
+evalCsp();
+
+// その他ヘッダー
+const opts = document.getElementById('hdr-opts');
+function evalHdr() {
+  const v = k => { const el = opts.querySelector(`[data-k="${k}"]`); return el.type === 'checkbox' ? el.checked : el.value; };
+  const lines = ['HTTP/1.1 200 OK', 'Content-Type: text/html; charset=utf-8'];
+  if (v('hsts')) lines.push('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+  if (v('nosniff')) lines.push('X-Content-Type-Options: nosniff');
+  if (v('referrer')) lines.push('Referrer-Policy: strict-origin-when-cross-origin');
+  if (v('perm')) lines.push('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+  const cookie = ['Set-Cookie: session=8f2c...; Path=/'];
+  if (v('httponly')) cookie.push('HttpOnly');
+  if (v('secure')) cookie.push('Secure');
+  if (v('samesite')) cookie.push('SameSite=' + v('samesite'));
+  lines.push(cookie.join('; '));
+  document.getElementById('hdr-preview').textContent = lines.join('\n');
+
+  const checks = [
+    [v('hsts'), 'HSTS: 常にHTTPSで接続させ、盗聴・改ざんを防ぐ'],
+    [v('nosniff'), 'nosniff: ファイルの種類の誤認識を防ぐ'],
+    [v('httponly'), 'HttpOnly: JavaScriptからセッションCookieを読めなくする（XSS時の被害軽減）'],
+    [v('secure'), 'Secure: CookieをHTTPS通信でのみ送る'],
+    [v('samesite') === 'Lax' || v('samesite') === 'Strict', 'SameSite=Lax/Strict: 他サイトからのリクエストにCookieを付けない（CSRF対策）'],
+  ];
+  const n = checks.filter(c => c[0]).length;
+  let warn = '';
+  if (v('samesite') === 'None' && !v('secure')) warn = '<div class="result ng">SameSite=None を使う場合は Secure 属性が必須です。</div>';
+  document.getElementById('hdr-out').innerHTML = `<div class="result ${n === checks.length ? 'ok' : 'info'}"><ul>${checks.map(c => `<li>${c[0] ? '✓' : '✖'} ${c[1]}</li>`).join('')}</ul></div>${warn}`;
+  if (n === checks.length) SLL.markTask(LAB, 'headers', TOTAL);
+}
+opts.addEventListener('change', evalHdr);
+evalHdr();
+</script>
+</body>
+</html>

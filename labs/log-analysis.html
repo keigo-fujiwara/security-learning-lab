@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ログ分析演習</title>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/common.js" data-root=".."></script>
+</head>
+<body>
+<main>
+  <span class="pill">LAB 04</span>
+  <h1>ログ分析演習（インシデント対応）</h1>
+  <p class="lead">「Webサイトの様子がおかしい」と連絡を受けました。サーバーのアクセスログを調べて、何が起きたのかを特定し、防御策を実行してください。模擬ターミナルでは Linux のコマンドを簡易的に再現しています。</p>
+  <div class="progress-bar" id="lab-progress"></div>
+
+  <h2>1. 攻撃者の視点：ログに残る痕跡</h2>
+  <div class="two-col">
+    <div class="panel"><h3>総当たりログイン</h3><p>同じIPアドレスから短時間に大量のログイン失敗（ステータス <code>401</code>）が記録され、最後に成功（<code>302</code>）が記録されることがあります。</p></div>
+    <div class="panel"><h3>ファイルの探索</h3><p>攻撃者はツールで <code>/.env</code> や <code>/backup/</code> などを次々に要求し、うっかり公開されたファイルを探します。大半は <code>404</code> ですが、<code>200</code> があれば流出の可能性があります。</p></div>
+  </div>
+
+  <h2>2. 実践：ターミナルで調査する</h2>
+  <div class="panel">
+    <p style="margin-top:0">まず <code>help</code> と入力してください。使えるコマンドの例：</p>
+    <pre class="code">ls
+head -n 5 access.log
+grep " 401 " access.log | wc -l
+grep "POST /login" access.log | grep " 401 " | awk '{print $1}' | sort | uniq -c | sort -rn
+grep " 404 " access.log | awk '{print $1}' | sort | uniq -c</pre>
+  </div>
+  <div id="term"></div>
+
+  <h3>調査レポート：分かったことを記入しよう</h3>
+  <div class="panel" id="report"></div>
+
+  <h3>防御：攻撃元をブロックする</h3>
+  <p>調査で判明した<strong>攻撃元のIPアドレス2つ</strong>を、ターミナルで <code>block &lt;IPアドレス&gt;</code> と入力してファイアウォールでブロックしてください。<code>firewall</code> で現在のルールを確認できます。</p>
+  <div id="block-status"></div>
+
+  <h2>3. 再発防止のために</h2>
+  <div class="panel">
+    <ul>
+      <li><strong>ログイン試行回数の制限</strong>やアカウントロック、CAPTCHAを導入する（fail2ban などのツールで自動ブロックも可能）。</li>
+      <li><strong>多要素認証</strong>を必須にして、パスワードが当てられても侵入されないようにする。</li>
+      <li>バックアップや設定ファイルを<strong>公開ディレクトリに置かない</strong>。</li>
+      <li>侵入されたアカウントのパスワードをリセットし、セッションを無効化する。流出した情報は影響範囲を調査する。</li>
+      <li>ログを定期的に確認・保管する。個人情報の漏えいが疑われる場合は、個人情報保護委員会への報告が必要になることがあります。</li>
+    </ul>
+  </div>
+</main>
+
+<script>
+const LAB = 'log-analysis', TOTAL = 2;
+SLL.renderTaskStatus(LAB, TOTAL);
+
+// ===== ログ生成（毎回同じ内容になるよう疑似乱数を固定） =====
+let seed = 20261021;
+const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+const pick = a => a[Math.floor(rnd() * a.length)];
+const NORMAL_IPS = ['192.0.2.10', '192.0.2.24', '192.0.2.31', '192.0.2.55', '192.0.2.78', '198.51.100.4', '198.51.100.61', '203.0.113.15', '203.0.113.40'];
+const PAGES = ['/', '/products', '/products/12', '/products/31', '/about', '/contact', '/news', '/css/style.css', '/js/app.js', '/img/logo.png'];
+const BRUTE = '198.51.100.23', SCAN = '203.0.113.77';
+const entries = [];
+const base = Date.UTC(2026, 9, 21, 0, 0, 0); // 09:00 JST
+const push = (t, ip, method, path, status, size, extra = '-') => entries.push({ t, ip, method, path, status, size, extra });
+for (let i = 0; i < 180; i++) push(base + Math.floor(rnd() * 3 * 3600e3), pick(NORMAL_IPS), 'GET', pick(PAGES), 200, 500 + Math.floor(rnd() * 9000));
+for (let i = 0; i < 6; i++) push(base + Math.floor(rnd() * 3 * 3600e3), pick(NORMAL_IPS), 'POST', '/login', i === 2 ? 401 : 302, 320, `user=${pick(['yamada', 'kato', 'ito'])}`);
+push(base + 5000e3, '192.0.2.24', 'POST', '/login', 401, 320, 'user=kato');
+const USERS = ['admin', 'root', 'test', 'user', 'staff01', 'info', 'webmaster', 'guest'];
+let bt = base + 3600e3;
+for (let i = 0; i < 64; i++) { bt += 1000 + Math.floor(rnd() * 2000); push(bt, BRUTE, 'POST', '/login', 401, 320, `user=${USERS[i % USERS.length]}`); }
+bt += 1500; push(bt, BRUTE, 'POST', '/login', 302, 320, 'user=staff01');
+bt += 2000; push(bt, BRUTE, 'GET', '/mypage', 200, 4210);
+bt += 2000; push(bt, BRUTE, 'GET', '/mypage/customers/export', 200, 182330);
+const SCAN_PATHS = ['/.env', '/.git/config', '/wp-admin/', '/wp-login.php', '/phpmyadmin/', '/admin/', '/config.php.bak', '/backup.zip', '/backup/', '/backup/db_backup.sql', '/server-status', '/debug.log'];
+let st = base + 7600e3;
+SCAN_PATHS.forEach(p => { st += 400 + Math.floor(rnd() * 600); push(st, SCAN, 'GET', p, p === '/backup/db_backup.sql' ? 200 : p === '/backup/' ? 403 : 404, p === '/backup/db_backup.sql' ? 5242880 : 196); });
+entries.sort((a, b) => a.t - b.t);
+const fmtTime = t => {
+  const d = new Date(t + 9 * 3600e3);
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getUTCDate())}/Oct/${d.getUTCFullYear()}:${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} +0900`;
+};
+const ACCESS = entries.map(e => `${e.ip} - - [${fmtTime(e.t)}] "${e.method} ${e.path} HTTP/1.1" ${e.status} ${e.size} "${e.extra}"`);
+const FILES = {
+  'access.log': ACCESS,
+  'README.txt': ['調査メモ', '・access.log は本日 09:00〜12:00 のWebサーバーのアクセスログです。', '・書式: IP - - [日時] "メソッド パス" ステータス サイズ "追加情報"', '・401 = 認証失敗 / 302 = ログイン成功後のリダイレクト / 404 = 存在しない'],
+};
+const blocked = new Set();
+
+// ===== 簡易シェル =====
+function tokenize(s) {
+  const out = []; let cur = '', q = null, has = false;
+  for (const ch of s) {
+    if (q) { if (ch === q) q = null; else cur += ch; }
+    else if (ch === '"' || ch === "'") { q = ch; has = true; }
+    else if (/\s/.test(ch)) { if (cur || has) { out.push(cur); cur = ''; has = false; } }
+    else cur += ch;
+  }
+  if (cur || has) out.push(cur);
+  return out;
+}
+function splitPipes(s) {
+  const parts = []; let cur = '', q = null;
+  for (const ch of s) {
+    if (q) { if (ch === q) q = null; cur += ch; }
+    else if (ch === '"' || ch === "'") { q = ch; cur += ch; }
+    else if (ch === '|') { parts.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  parts.push(cur);
+  return parts.map(p => p.trim());
+}
+function readInput(args, stdin) {
+  const f = args.find(a => !a.startsWith('-'));
+  if (f !== undefined && stdin === null) {
+    if (!FILES[f]) throw new Error(`${f}: そのようなファイルはありません`);
+    return FILES[f];
+  }
+  return stdin || [];
+}
+const CMDS = {
+  help: () => ['使えるコマンド:',
+    '  ls / cat FILE / head [-n N] FILE / tail [-n N] FILE',
+    '  grep [-i] [-v] [-c] "文字列" FILE   … 文字列を含む行を抽出',
+    '  wc -l                               … 行数を数える',
+    "  awk '{print $N}'                    … N番目の列を取り出す（空白区切り）",
+    '  sort [-n] [-r] / uniq [-c]           … 並べ替え / 重複をまとめて数える',
+    '  block IP / unblock IP / firewall    … ファイアウォール操作',
+    '  clear                               … 画面を消去',
+    '  「|」（パイプ）で複数のコマンドをつなげられます。'],
+  ls: () => Object.keys(FILES),
+  cat: (a, i) => readInput(a, i),
+  head: (a, i) => { const n = a[0] === '-n' ? +a[1] : 10; return readInput(a[0] === '-n' ? a.slice(2) : a, i).slice(0, n); },
+  tail: (a, i) => { const n = a[0] === '-n' ? +a[1] : 10; return readInput(a[0] === '-n' ? a.slice(2) : a, i).slice(-n); },
+  grep: (a, i) => {
+    const flags = a.filter(x => /^-[ivc]+$/.test(x)).join('');
+    const rest = a.filter(x => !/^-[ivc]+$/.test(x));
+    if (!rest.length) throw new Error('grep: 検索する文字列を指定してください');
+    const pat = rest[0], lines = readInput(rest.slice(1), i);
+    const ci = flags.includes('i'), inv = flags.includes('v');
+    const m = lines.filter(l => (ci ? l.toLowerCase().includes(pat.toLowerCase()) : l.includes(pat)) !== inv);
+    return flags.includes('c') ? [String(m.length)] : m;
+  },
+  wc: (a, i) => [String(readInput(a.filter(x => x !== '-l'), i).length)],
+  awk: (a, i) => {
+    const m = (a[0] || '').match(/^\{\s*print\s+\$(\d+)\s*\}$/);
+    if (!m) throw new Error("awk: この演習では '{print $N}' の形式のみ対応しています");
+    const n = +m[1];
+    return readInput(a.slice(1), i).map(l => n === 0 ? l : (l.split(/\s+/)[n - 1] || ''));
+  },
+  sort: (a, i) => {
+    const num = a.some(x => /^-\w*n/.test(x)), rev = a.some(x => /^-\w*r/.test(x));
+    const lines = readInput(a.filter(x => !x.startsWith('-')), i).slice();
+    lines.sort(num ? (x, y) => parseFloat(x) - parseFloat(y) : (x, y) => (x < y ? -1 : x > y ? 1 : 0));
+    return rev ? lines.reverse() : lines;
+  },
+  uniq: (a, i) => {
+    const c = a.includes('-c'), lines = readInput(a.filter(x => x !== '-c'), i), out = [];
+    lines.forEach(l => { const last = out[out.length - 1]; if (last && last.v === l) last.n++; else out.push({ v: l, n: 1 }); });
+    return out.map(o => c ? `${String(o.n).padStart(7)} ${o.v}` : o.v);
+  },
+  firewall: () => blocked.size ? ['現在ブロック中のIP:', ...[...blocked].map(ip => '  DENY from ' + ip)] : ['ブロック中のIPはありません。'],
+  block: a => {
+    const ip = a[0];
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip || '')) throw new Error('block: IPアドレスを指定してください（例: block 192.0.2.1）');
+    blocked.add(ip); updateBlock();
+    return [`ルールを追加しました: DENY from ${ip}`];
+  },
+  unblock: a => { blocked.delete(a[0]); updateBlock(); return [`ルールを削除しました: ${a[0]}`]; },
+};
+function exec(line) {
+  const stages = splitPipes(line);
+  let data = null;
+  try {
+    for (const st of stages) {
+      const [cmd, ...args] = tokenize(st);
+      if (!CMDS[cmd]) throw new Error(`${cmd}: コマンドが見つかりません（help で一覧を表示）`);
+      data = CMDS[cmd](args, data);
+    }
+  } catch (e) { return [{ text: e.message, cls: 'err' }]; }
+  if (data.length > 300) return [...data.slice(0, 300), { text: `... (残り ${data.length - 300} 行は省略。head や grep で絞り込みましょう)`, cls: 'hl' }];
+  return data;
+}
+new SLL.Terminal(document.getElementById('term'), {
+  prompt: 'analyst@web01:~$ ',
+  handler: exec,
+  banner: [{ text: 'インシデント調査用シェル（模擬環境）へようこそ。help でコマンド一覧を表示します。', cls: 'hl' }, ''],
+});
+
+// ===== 調査レポート =====
+const Q = [
+  { q: 'ログインの総当たり攻撃を行ったIPアドレスは？', a: [BRUTE], ph: '例: 192.0.2.1' },
+  { q: '攻撃者がログインに成功してしまったユーザー名は？', a: ['staff01', 'user=staff01'], ph: '例: yamada' },
+  { q: 'ファイルの探索（スキャン）を行ったIPアドレスは？', a: [SCAN], ph: '例: 192.0.2.1' },
+  { q: 'スキャンで実際にダウンロードされてしまったファイルのパスは？', a: ['/backup/db_backup.sql', 'backup/db_backup.sql'], ph: '例: /path/to/file' },
+];
+const rep = document.getElementById('report');
+rep.innerHTML = Q.map((q, i) => `<div style="margin-bottom:12px"><label for="rq-${i}">Q${i + 1}. ${q.q}</label>
+  <input type="text" id="rq-${i}" placeholder="${q.ph}" spellcheck="false"></div>`).join('') +
+  '<div class="btn-row"><button id="rq-go">レポートを提出</button></div><div id="rq-out"></div>';
+document.getElementById('rq-go').addEventListener('click', () => {
+  const res = Q.map((q, i) => q.a.includes(document.getElementById('rq-' + i).value.trim()));
+  const all = res.every(Boolean);
+  document.getElementById('rq-out').innerHTML = all
+    ? `<div class="result ok"><strong>すべて正解です！</strong><ul>
+        <li>${BRUTE} が約2分間に64回ログインに失敗し、最後に staff01 で成功。その後、顧客データのエクスポート（/mypage/customers/export）まで行っています。</li>
+        <li>${SCAN} は機械的にファイルを探索し、公開ディレクトリに置かれていた db_backup.sql（約5MB）を取得しています。</li></ul></div>`
+    : `<div class="result ng">${res.map((r, i) => `Q${i + 1}: ${r ? '✓' : '✖'}`).join('　')}　— コマンドを組み合わせて、もう一度調べてみましょう。</div>`;
+  if (all) SLL.markTask(LAB, 'report', TOTAL);
+});
+
+function updateBlock() {
+  const ok = blocked.has(BRUTE) && blocked.has(SCAN);
+  const wrong = [...blocked].filter(ip => ip !== BRUTE && ip !== SCAN);
+  document.getElementById('block-status').innerHTML = ok
+    ? `<div class="result ok">攻撃元2つのブロックが完了しました。${wrong.length ? `ただし ${wrong.join(', ')} は通常の利用者の可能性があります。誤ってブロックすると正規ユーザーが使えなくなるので注意しましょう。` : ''}</div>`
+    : `<div class="result info">ブロック済み: ${blocked.size ? [...blocked].join(', ') : 'なし'}</div>`;
+  if (ok) SLL.markTask(LAB, 'block', TOTAL);
+}
+updateBlock();
+</script>
+</body>
+</html>

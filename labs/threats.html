@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日本を狙う脅威と対策</title>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/common.js" data-root=".."></script>
+</head>
+<body>
+<main>
+  <span class="pill">LAB 07</span>
+  <h1>日本を狙う脅威と対策</h1>
+  <p class="lead">日本でも、港湾・出版・医療・製造など社会を支える組織がサイバー攻撃で業務停止に追い込まれる事例が起きています。代表的な脅威と、その入口を知り、自分の環境の対策を点検しましょう。</p>
+  <div class="progress-bar" id="lab-progress"></div>
+
+  <h2>1. 代表的な脅威</h2>
+  <div class="grid">
+    <div class="card"><span class="tag">組織</span><h3>ランサムウェア</h3>
+      <p>データを暗号化して業務を止め、復旧や「情報を公開しない」ことと引き換えに金銭を要求します（二重恐喝）。2023年7月の名古屋港のコンテナターミナル停止、2024年6月のKADOKAWAグループのシステム障害など、社会的影響の大きい被害が出ています。</p>
+      <p><strong>主な入口</strong>：VPN機器やリモートデスクトップの脆弱性・弱いパスワード（警察庁の報告でも感染経路の多くを占めます）</p></div>
+    <div class="card"><span class="tag">組織・個人</span><h3>Emotet などのメール型マルウェア</h3>
+      <p>実在の取引先との過去のメールのやり取りを引用して返信を装い、マクロ付きの添付ファイルを開かせます。2019〜2022年ごろに国内で大流行しました。</p>
+      <p><strong>主な入口</strong>：添付ファイルのマクロ、パスワード付きZIP、メール内のリンク</p></div>
+    <div class="card"><span class="tag">個人</span><h3>フィッシング・不正送金</h3>
+      <p>宅配業者・銀行・カード会社・携帯キャリアを装うSMSやメールで偽サイトに誘導します。インターネットバンキングの不正送金被害は2023年に過去最多となりました。</p>
+      <p><strong>主な入口</strong>：SMS・メールのリンク、検索広告の偽サイト</p></div>
+    <div class="card"><span class="tag">組織</span><h3>サプライチェーン攻撃</h3>
+      <p>対策の手薄な取引先・子会社・委託先を踏み台にして、本命の大企業へ侵入します。自社だけ守っても不十分です。</p>
+      <p><strong>主な入口</strong>：取引先とのネットワーク接続、共有アカウント、保守用の遠隔接続</p></div>
+    <div class="card"><span class="tag">組織</span><h3>脆弱性の悪用</h3>
+      <p>修正プログラムが公開されると、攻撃者はすぐに未対策の機器を探し始めます。公開から悪用までの期間は年々短くなっています。</p>
+      <p><strong>主な入口</strong>：インターネットに公開されたVPN・ファイアウォール・Webサーバー</p></div>
+    <div class="card"><span class="tag">個人</span><h3>サポート詐欺</h3>
+      <p>閲覧中に「ウイルスに感染しました」と大音量で警告を出し、偽のサポート窓口に電話させて遠隔操作ソフトを入れさせたり、電子マネーを購入させたりします。</p>
+      <p><strong>主な入口</strong>：Web閲覧中の偽警告画面</p></div>
+  </div>
+  <p style="font-size:14px;color:var(--muted)">最新の傾向は、IPA が毎年公開している「<a href="https://www.ipa.go.jp/security/10threats/index.html" target="_blank" rel="noopener">情報セキュリティ10大脅威</a>」で確認できます。</p>
+
+  <h2>2. 実践：インシデント対応シナリオ</h2>
+  <p>あなたは中小企業の社員です。状況ごとに、最初に取るべき行動を選んでください。</p>
+  <div id="scenario"></div>
+
+  <h2>3. 対策チェックリスト</h2>
+  <p>自分の職場や家庭で実施できているものにチェックを入れてください（チェック状態はこのブラウザにだけ保存されます）。</p>
+  <div class="two-col">
+    <div class="panel checklist" id="cl-personal"><h3 style="margin-top:0">個人</h3></div>
+    <div class="panel checklist" id="cl-org"><h3 style="margin-top:0">組織</h3></div>
+  </div>
+  <div id="cl-out"></div>
+
+  <h2>4. 困ったときの相談先</h2>
+  <div class="panel">
+    <ul>
+      <li><a href="https://www.ipa.go.jp/security/anshin/index.html" target="_blank" rel="noopener">IPA 情報セキュリティ安心相談窓口</a>：ウイルス感染や不正アクセスの相談</li>
+      <li><a href="https://www.npa.go.jp/bureau/cyber/soudan.html" target="_blank" rel="noopener">警察庁 サイバー事案に関する相談窓口</a>：被害の届出・相談</li>
+      <li><a href="https://www.antiphishing.jp/" target="_blank" rel="noopener">フィッシング対策協議会</a>：フィッシングサイトの報告</li>
+      <li><a href="https://www.jpcert.or.jp/" target="_blank" rel="noopener">JPCERT/CC</a>：組織向けのインシデント対応支援・脆弱性情報</li>
+      <li>消費者ホットライン「188」：詐欺被害などの消費生活相談</li>
+    </ul>
+  </div>
+</main>
+
+<script>
+const LAB = 'threats', TOTAL = 2;
+SLL.renderTaskStatus(LAB, TOTAL);
+
+const SC = [
+  { q: '出社すると、PCのファイルの拡張子がすべて見慣れないものに変わり、「データを暗号化した」という脅迫文が表示されていた。',
+    opts: ['LANケーブルを抜く・Wi-Fiを切ってネットワークから切り離し、すぐに情報システム担当へ報告する', '脅迫文に書かれた連絡先に連絡して交渉する', 'PCを初期化して、何事もなかったように仕事を続ける'], a: 0,
+    why: '他のPCやサーバーへの感染拡大を防ぐため、まずネットワークから隔離します。調査に必要な痕跡が消えるため、勝手な初期化は避け、電源もできるだけ切らずに担当者の指示を待ちます。' },
+  { q: '取引先の担当者から、以前のやり取りを引用した返信メールが届いた。「請求書をご確認ください」とパスワード付きZIPが添付されている。',
+    opts: ['過去のやり取りが引用されているので本物と判断して開く', '開かずに、取引先へ電話など別の手段で送信したか確認する', '添付を開いて、マクロの「コンテンツの有効化」を押す'], a: 1,
+    why: 'Emotet は盗んだ実際のメールを引用して返信を装います。パスワード付きZIPはウイルス対策ソフトの検査をすり抜けやすい点も悪用されます。' },
+  { q: 'Webサイトを見ていたら、突然大きな警告音とともに「ウイルスに感染しました。今すぐサポートに電話してください」と表示された。',
+    opts: ['表示された番号に電話して指示に従う', 'ブラウザを閉じる（閉じられなければ再起動する）。電話はしない', '画面の指示どおり遠隔操作ソフトをインストールする'], a: 1,
+    why: 'サポート詐欺の偽警告です。ブラウザの画面を表示しているだけで、実際には感染していないことがほとんどです。Esc キーで全画面を解除したり、Ctrl+Alt+Delete からブラウザを終了したりできます。' },
+  { q: '会社で使っているVPN機器のメーカーから、深刻な脆弱性の修正版が公開されたというニュースを見た。',
+    opts: ['業務が落ち着く数か月後にまとめて更新する', '影響を確認し、早急に修正版を適用する。すぐに適用できない場合は回避策を実施し、不審なログインがないかも確認する', '社内からは攻撃されないので対応不要'], a: 1,
+    why: 'VPN機器はインターネットに直接公開されているため、修正版の公開直後から攻撃者に狙われます。すでに侵入されていた場合に備え、ログの確認やパスワード変更も検討します。' },
+];
+const sc = document.getElementById('scenario');
+const scAns = {};
+sc.innerHTML = SC.map((s, i) => `<div class="panel"><p style="margin-top:0"><strong>状況${i + 1}</strong>　${s.q}</p>
+  ${s.opts.map((o, j) => `<div><button class="secondary" style="text-align:left;width:100%;margin:4px 0" data-s="${i}" data-o="${j}">${String.fromCharCode(65 + j)}. ${o}</button></div>`).join('')}
+  <div id="sc-r-${i}"></div></div>`).join('');
+sc.addEventListener('click', e => {
+  const i = e.target.dataset.s; if (i === undefined) return;
+  const ok = +e.target.dataset.o === SC[i].a;
+  scAns[i] = ok;
+  document.getElementById('sc-r-' + i).innerHTML = `<div class="result ${ok ? 'ok' : 'ng'}"><strong>${ok ? '正解' : `不正解（正解は ${String.fromCharCode(65 + SC[i].a)}）`}</strong><br>${SC[i].why}</div>`;
+  if (SC.every((_, k) => scAns[k])) SLL.markTask(LAB, 'scenario', TOTAL);
+});
+
+const CL = {
+  personal: ['OS・ブラウザ・アプリを自動更新にしている', 'パスワードをサービスごとに変えている（パスワードマネージャー利用）', '重要なアカウントで多要素認証・パスキーを有効にしている', 'SMS・メールのリンクからログインせず、公式アプリやブックマークを使う', '大事なデータを定期的にバックアップしている', '不審な警告画面が出ても電話しない・ソフトを入れない'],
+  org: ['VPN機器など外部公開機器の脆弱性情報を確認し、速やかに更新している', 'リモートアクセスに多要素認証を設定している', 'バックアップをネットワークから切り離した場所にも保管している', 'Officeマクロを既定で無効にしている', 'インシデント発生時の連絡体制・手順を決めている', '取引先・委託先のセキュリティ対策も確認している', 'メール送信ドメインに SPF・DKIM・DMARC を設定している', '社員向けの訓練（標的型メール訓練など）を実施している'],
+};
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem('sll-checklist')) || {}; } catch (e) {}
+Object.entries(CL).forEach(([k, items]) => {
+  const box = document.getElementById('cl-' + k);
+  items.forEach((t, i) => {
+    const id = `${k}-${i}`;
+    const l = document.createElement('label');
+    l.innerHTML = `<input type="checkbox" data-id="${id}" ${saved[id] ? 'checked' : ''}> <span>${t}</span>`;
+    box.append(l);
+  });
+});
+function updateCl() {
+  const boxes = [...document.querySelectorAll('.checklist input[data-id]')];
+  boxes.forEach(b => saved[b.dataset.id] = b.checked);
+  try { localStorage.setItem('sll-checklist', JSON.stringify(saved)); } catch (e) {}
+  const n = boxes.filter(b => b.checked).length;
+  const out = document.getElementById('cl-out');
+  out.innerHTML = `<div class="result ${n === boxes.length ? 'ok' : 'info'}">実施済み ${n} / ${boxes.length}　${n === boxes.length ? '— すべて実施できています！定期的に見直しましょう。' : '— チェックが付いていない項目が、次に取り組むべき対策です。'}</div>`;
+  if (n === boxes.length) SLL.markTask(LAB, 'checklist', TOTAL);
+}
+document.querySelectorAll('.checklist').forEach(c => c.addEventListener('change', updateCl));
+updateCl();
+</script>
+</body>
+</html>
