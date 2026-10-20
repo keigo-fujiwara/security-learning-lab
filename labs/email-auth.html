@@ -132,7 +132,7 @@ function spfEval(ip, domain, depth = 0) {
   for (const term of rec.split(/\s+/).slice(1)) {
     if (term.startsWith('ip4:') && inCidr(ip, term.slice(4))) { trace.push(`${'  '.repeat(depth)}  → ${term} に一致`); return { result: 'pass', trace }; }
     if (term.startsWith('include:')) { const r = spfEval(ip, term.slice(8), depth + 1); trace.push(...r.trace); if (r.result === 'pass') return { result: 'pass', trace }; }
-    if (/^[-~?+]all$/.test(term)) { const q = { '-': 'fail', '~': 'softfail', '?': 'neutral', '+': 'pass' }[term[0]]; trace.push(`${'  '.repeat(depth)}  → どれにも一致せず ${term} = ${q}`); return { result: q, trace }; }
+    if (/^[-~?+]all$/.test(term)) { const q = { '-': 'fail', '~': 'softfail', '?': 'neutral', '+': 'pass' }[term[0]]; trace.push(depth ? `${'  '.repeat(depth)}  → 一致なし（呼び出し元の次の条件へ）` : `${'  '.repeat(depth)}  → どれにも一致せず ${term} = ${q}`); return { result: q, trace }; }
   }
   return { result: 'neutral', trace };
 }

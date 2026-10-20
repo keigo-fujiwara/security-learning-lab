@@ -100,15 +100,17 @@ function findUser(db, name) {
         { input: "x' OR '1'='1", label: '不正な入力で全件が漏れない', check: r => r.length === 0 },
         { input: "o'brien", label: 'クォートを含む名前でも構造が壊れない', check: r => Array.isArray(r) && r.length === 0 },
       ];
+      let allPlaceholder = true;
       const results = cases.map(c => {
         const log = [];
         const r = f(makeDb(log), c.input);
         const call = log[0] || { sql: '(呼び出しなし)', params: [] };
-        const usedPlaceholder = !call.sql.includes(c.input) && call.params.includes(c.input);
-        return { label: c.label, pass: c.check(r || []) && usedPlaceholder,
-          got: `SQL: ${call.sql}\nparams: ${JSON.stringify(call.params)}\n結果: ${JSON.stringify((r || []).map(u => u.name))}`,
-          expect: '入力値はSQL文に含めず、params で渡す' };
+        if (call.sql.includes(c.input) || !call.params.includes(c.input)) allPlaceholder = false;
+        return { label: c.label, pass: !!c.check(r || []),
+          got: `SQL: ${call.sql}\nparams: ${JSON.stringify(call.params)}\n結果: ${JSON.stringify((r || []).map(u => u.name))}` };
       });
+      results.push({ label: '入力値がSQL文に直接埋め込まれていない（プレースホルダを使用）', pass: allPlaceholder,
+        got: 'SQL文の中に入力値がそのまま含まれています', expect: '入力値はSQL文に含めず、params で渡す' });
       return { results };
     },
   },

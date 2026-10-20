@@ -196,6 +196,11 @@ details { background: var(--surface-2); border-radius: 8px; padding: 8px 12px; m
 details summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 
 @media (max-width: 600px) {
+  .site-header { position: static; }
+  .site-header .inner { gap: 8px; }
+  .site-header nav { order: 3; width: 100%; margin-left: 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .site-header nav a { white-space: nowrap; }
+  .theme-btn { margin-left: auto; }
   h1 { font-size: 1.45rem; }
   .hero h1 { font-size: 1.6rem; }
   .terminal { height: 300px; font-size: 12.5px; }
